@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+    <title>Visualizing connectivity worldwide</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.min.css">
+    
+    <style>
+    
+    /* CSS goes here. */
+
+    h1 {
+      text-align: center;
+      font-family: "Helvetica Neue";
+      font-size: 500%;
+      margin-bottom: 20px;
+    }
+    
+    .ne110 { fill: #ddc; }
+    
+    .Ra0 {fill: #c6dbef; }
+    .Rq1 { fill: #9ecae1; }
+    .Rq2 { fill: #6baed6; }
+    .Rq3 { fill: #4292c6; }
+    .Rq4 { fill: #2171b5; }
+    .Rq5 { fill: #084594; }
+
+    .Wq0 { fill: #fcbba1; }
+    .Wq1 { fill: #fc9272; }
+    .Wq2 { fill: #fb6a4a; }
+    .Wq3 { fill: #ef3b2c; }
+    .Wq4 { fill: #cb181d; }
+    .Wq5 { fill: #99000d; }
+
+    #svg {
+      width: 100%
+      height: auto;
+    }
+    #outermapdiv {
+      border: 2px solid #BDBDBD;
+      margin-top: 10px;
+    }
+    #outerbutton {
+      padding: 0px 0px 0px 0px;
+
+    }
+    #retail {
+      width: 100%;
+      background-color: #4292c6;
+      opacity: 0.5;
+      color: #FFFFFF;
+      border: 1px solid #BDBDBD;
+      font-family: "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 150%;
+    }
+
+    #whole {
+      width: 100%;
+      background-color: #cb181d;
+      opacity: 0.5;
+      color: #FFFFFF;
+      border: 1px solid #BDBDBD;
+      font-family: "Helvetica Neue", Helvetica, sans-serif;
+      font-size: 150%;
+    }
+
+    #whole:active {
+      background-color: #cb181d;
+      opacity: 0.5;
+      color: #FFFFFF;
+    }
+
+    #retail:active {
+      background-color: #4292c6;
+      opacity: 0.5;
+      color: #FFFFFF;
+    }
+
+     #retail:hover {
+      outline: 0;
+      opacity: 0.30;
+      background-color: #4292c6;
+    }
+
+      #whole:hover {
+      outline: 0;
+      opacity: 0.30;
+      background-color: #cb181d;
+    }
+
+    #whole:focus {
+      outline: 0;
+      opacity: 0.75;
+      background-color: #cb181d;
+    }
+
+    #retail:focus {
+      outline: 0;
+      opacity: 0.75;
+      background-color: #4292c6;
+    }
+
+    
+        
+    .d3-tip {
+      line-height: 1;
+      font-weight: bold;
+      padding: 12px;
+      background: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      border-radius: 2px;
+    }
+
+
+
+    </style>
+  </head>
+<body>
+
+<div class="container-fluid">
+
+  <div class="row">
+    <h1>Connections per 100 people</h1>
+</div>
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-1 col-md-1"></div>
+    <div class="col-lg-5 col-md-5 col-sm-6 col-sx-5" id="outerbutton">
+      <input type="submit" id="retail" value="Internet users" onclick="retailFill()"/>
+    </div>
+    <div class="col-lg-5 col-md-5 col-sm-6 col-sx-5" id="outerbutton">
+      <input type="submit" id="whole" value="Mobile phones" onclick="wsFill()"/>
+    </div>
+  </div>
+</div>
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-1 col-md-1"></div>
+    <div class="col-lg-10 col-md-10 col-sm-12" id="outermapdiv">
+    </div>
+  </div>
+</div>
+
+
+
+
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script src="http://labratrevenge.com/d3-tip/javascripts/d3.tip.v0.6.3.js"></script>
+<script src="http://d3js.org/topojson.v1.min.js"></script>
+<script src="http://d3js.org/queue.v1.min.js"></script>
+<script>
+
+var worldjson;
+
+var width = 960,
+    height = 700;
+
+var rateByIdR = d3.map();
+
+var rateByIdW = d3.map();
+
+var quantizeR = d3.scale.quantize()
+    .domain([-25, 96])
+    .range(d3.range(6).map(function(i) { return "Rq" + i; }));
+    
+var quantizeW = d3.scale.quantize()
+    .domain([5, 304])
+    .range(d3.range(6).map(function(i) { return "Wq" + i; }));
+
+  
+var projection = d3.geo.mercator()
+    .scale((width + 1) / 2 / Math.PI)
+    .translate([width / 2, height / 2])
+    .precision(.1);
+
+var path = d3.geo.path()
+    .projection(projection);
+
+// change this append
+var svg = d3.select("#outermapdiv")
+    .append("div")
+    .attr("id", "svg")
+    .append("svg")
+    .attr("viewBox", "0 0 " + width + " " + height)
+    .attr("preserveAspectRatio", "xMinYMin");
+    
+var tip = d3.tip()
+    .attr('class', 'd3-tip')
+    .offset([0, 0])
+    .direction('s')
+    .html(function(d) {
+      
+      var toWrite = "<span style='color:red'>" + d.id + "</span>";
+      
+      if(!isNaN(rateByIdR.get(d.id))) {
+        toWrite += "<br> Net connections/100: " + rateByIdR.get(d.id);
+      }
+      
+      if(!isNaN(rateByIdW.get(d.id))) {
+        toWrite += "<br> Mobile phones/100: " + rateByIdW.get(d.id);
+      }
+      
+      return toWrite;
+      
+  })
+  
+svg.call(tip);
+
+queue()
+    .defer(d3.json, "output.json")
+    .defer(d3.tsv, "conndata.tsv", function(d) {
+      rateByIdR.set(d.id, +d.rateR);
+      rateByIdW.set(d.id, +d.rateW);
+    })
+    .await(ready);
+
+
+function ready(error, world) {
+  
+  worldjson = world;
+  
+  svg.append("g")
+      .attr("class", "ne110")
+      .selectAll("path")
+      .data(topojson.feature(world, world.objects.ne110).features)
+        .enter().append("path")
+        // .attr("class", function(d) { return quantizeR(rateByIdR.get(d.id)); })
+        .attr("d", path)
+        .on('mouseover', tip.show)
+        .on('mouseout', tip.hide);
+        
+//default map to load here
+};
+
+var countries = svg.selectAll("path");
+
+function wsFill() {
+  countries = svg.selectAll("path");
+  
+  countries.attr("class", function(d)
+    // if (rateByIdW.get(d.id)!==0)
+      { return quantizeW(rateByIdW.get(d.id)); }
+    // else { return "null"; }
+    );
+
+    // this will stop the values 0 being coloured, 0 prepresents no value not $0 as blank data previously broke the code.
+  // });
+};
+
+function retailFill() {
+  countries = svg.selectAll("path");
+  countries.attr("class", function(d) { return quantizeR(rateByIdR.get(d.id)); });
+
+}
+
+   document.addEventListener('DOMContentLoaded', init, false);
+      function init(){
+       
+       svg.selectAll("path")
+        .on('mouseover', tip.show)
+        .on('mouseout', tip.hide)
+       
+        var wbutton = document.getElementById('whole');
+        wbutton.addEventListener('click', math.Round(wsFill), true);
+        
+        var rbutton = document.getElementById('retail');
+        rbutton.addEventListener('click', math.Round(retailFill), true);
+        
+      };
+
+
+d3.select(self.frameElement).style("height", height + "px");
+
+
+
+
+</script>
+</body>
+</html>
